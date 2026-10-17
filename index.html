@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>魚の献立メーカー | ざこばの朝市</title>
+<style>
+  :root{
+    --ice:#f2f7f9; --paper:#ffffff; --ai:#16324f; --ai-2:#2a5078; --usu:#e3edf4;
+    --asa:#f4b73f; --asa-d:#e8a52a; --mute:#4a5f72; --edge:#6e8aa0; --line:#cfdde6; --warn:#a3201a;
+    --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Yu Gothic","Meiryo","Noto Sans CJK JP",system-ui,sans-serif;
+    --serif:"Hiragino Mincho ProN","Yu Mincho","YuMincho","Noto Serif JP","Noto Serif CJK JP","MS PMincho",serif;
+    color-scheme:light;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0; background:var(--ice); color:var(--ai);
+    font-family:var(--sans); font-size:18px; line-height:1.75;
+    padding-bottom:168px; overflow-x:hidden; word-break:auto-phrase;
+  }
+  button{font:inherit; color:inherit}
+  .ph{display:inline-block}
+  h1,h2,h3,p,ul,ol{margin:0}
+  [hidden]{display:none !important}
+
+  /* ===== ヘッダー：朝日と波 ===== */
+  .hero{position:relative; background:var(--ai); color:#fff; padding:30px 0 62px; overflow:hidden}
+  .hero-in{position:relative; z-index:2; max-width:960px; margin:0 auto; padding:0 16px}
+  .hero h1{font-family:var(--serif); font-weight:700; font-size:clamp(1.75rem,6.4vw,2.5rem); line-height:1.3; letter-spacing:.04em}
+  .hero .lede{margin-top:10px; max-width:15em; color:#dbe6ef; font-size:1.125rem; line-height:1.7}
+  .hero .b{color:var(--asa); font-weight:700}
+  .hero .sun{
+    position:absolute; z-index:1; width:68px; height:68px; border-radius:50%; background:var(--asa);
+    right:max(16px, calc((100% - 960px) / 2 + 16px)); bottom:8px;
+  }
+  .hero::after{
+    content:""; position:absolute; z-index:3; left:0; right:0; bottom:0; height:31px;
+    background:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 24'%3E%3Cpath d='M0 12C15 0 45 0 60 12C75 24 105 24 120 12V24H0Z' fill='%23f2f7f9'/%3E%3C/svg%3E") repeat-x 0 100% / 120px 24px,
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 24'%3E%3Cpath d='M0 12C15 0 45 0 60 12C75 24 105 24 120 12V24H0Z' fill='%232a5078'/%3E%3C/svg%3E") repeat-x 40px 0 / 120px 24px;
+  }
+
+  /* ===== 全体レイアウト ===== */
+  .layout{max-width:960px; margin:0 auto; padding:8px 16px 0; display:grid; gap:0; grid-template-columns:minmax(0,1fr)}
+  .card{background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:18px 16px; margin:0 0 16px}
+  h2{font-size:1.25rem; line-height:1.45; font-weight:700}
+  h2 .no{
+    display:inline-flex; align-items:center; justify-content:center; width:1.5em; height:1.5em; margin-right:.5em;
+    border-radius:50%; background:var(--ai); color:#fff; font-size:1.125rem; line-height:1;
+  }
+  .shead{display:flex; align-items:center; justify-content:space-between; gap:12px}
+  .help{margin:6px 0 0; color:var(--mute)}
+  .group-title{margin:18px 0 8px; font-size:1.125rem; font-weight:700; color:var(--mute)}
+
+  /* ===== 食材チップ ===== */
+  .chips{display:flex; flex-wrap:wrap; gap:10px}
+  .chips::after{content:""; flex:999 1 0}
+  .chip{position:relative; flex:1 1 auto}
+  .chip input{position:absolute; inset:0; width:100%; height:100%; margin:0; opacity:0; cursor:pointer}
+  .chip span{
+    display:flex; align-items:center; justify-content:center; min-height:56px; min-width:84px; padding:8px 14px;
+    border:2px solid var(--edge); border-radius:10px; background:var(--paper);
+    font-size:1.125rem; font-weight:600; transition:background .12s, color .12s, border-color .12s;
+  }
+  .chip input:checked + span{background:var(--ai); border-color:var(--ai); color:#fff}
+  .chip input:checked + span::before{content:"✓"; margin-right:.35em}
+  .chip input:active + span{transform:scale(.97)}
+  .chip input:focus-visible + span{outline:3px solid var(--ai); outline-offset:3px}
+
+  /* ===== 人数 ===== */
+  .stepper{display:flex; align-items:center; gap:10px; margin-top:12px}
+  .stepper button{
+    width:60px; height:60px; border:2px solid var(--ai); border-radius:12px; background:var(--paper);
+    color:var(--ai); font-size:1.75rem; line-height:1; font-weight:700; cursor:pointer;
+  }
+  .stepper button:disabled{border-color:var(--line); color:var(--edge); cursor:default}
+  .stepper output{min-width:5.5em; text-align:center; font-size:1.5rem; font-weight:700}
+
+  /* ===== ボタン共通 ===== */
+  .btn{
+    display:flex; align-items:center; justify-content:center; width:100%; min-height:60px; padding:10px 16px;
+    border:2px solid var(--ai); border-radius:14px; background:var(--paper); color:var(--ai);
+    font-size:1.125rem; font-weight:700; cursor:pointer; text-decoration:none;
+  }
+  .btn.cta{border-color:var(--asa); background:var(--asa); font-size:1.25rem}
+  .btn.cta:hover{background:var(--asa-d); border-color:var(--asa-d)}
+  .btn.cta:active,.btn.sub:active{transform:translateY(1px)}
+  .btn:focus-visible,.stepper button:focus-visible,summary:focus-visible,.link:focus-visible,.shoplink:focus-visible{outline:3px solid var(--ai); outline-offset:3px}
+  .link{min-height:48px; padding:0 8px; border:0; background:none; color:var(--ai); font-weight:700; text-decoration:underline; text-underline-offset:4px; cursor:pointer}
+
+  /* ===== 下に固定する操作バー ===== */
+  .dock{
+    position:fixed; z-index:20; left:0; right:0; bottom:0; background:var(--paper); border-top:2px solid var(--line);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  }
+  .dock-in{max-width:720px; margin:0 auto}
+  #count{margin-bottom:6px; font-weight:700; line-height:1.5}
+  #msg{margin-bottom:6px; color:var(--warn); font-weight:700; line-height:1.5}
+  #msg:empty{display:none}
+
+  /* ===== 結果 ===== */
+  .empty{display:none; padding:28px 20px; border:2px dashed var(--edge); border-radius:16px; color:var(--mute)}
+  .rhead{display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; margin:20px 0 12px; scroll-margin-top:12px}
+  .rhead h2{font-family:var(--serif); font-size:1.5rem}
+  .rhead h2:focus{outline:none}
+  #serv{color:var(--mute); font-weight:700}
+  .rhead .btn{width:auto; min-height:52px; margin-left:auto; padding:6px 18px}
+
+  .dish h3{margin:2px 0 8px; font-family:var(--serif); font-weight:700; line-height:1.4; color:var(--ai)}
+  .dish .role{font-weight:700; color:var(--mute)}
+  .dish-main{border:2px solid var(--ai); border-radius:18px; padding:20px 18px}
+  .dish-main h3{font-size:1.75rem}
+  .subs{display:grid; gap:0; grid-template-columns:minmax(0,1fr)}
+  .dish-sub{border:0; border-radius:12px; background:var(--usu); padding:16px}
+  .dish-sub h3{font-size:1.3rem}
+
+  .mat{list-style:none; margin:8px 0 6px; padding:0}
+  .mat li{display:flex; align-items:baseline; gap:8px; padding:7px 0; border-bottom:1px dotted var(--edge)}
+  .mat li:last-child{border-bottom:0}
+  .mat .a{margin-left:auto; font-weight:700; font-variant-numeric:tabular-nums}
+  .mat .have .n::before{content:"✓"; margin-right:.4em; font-weight:700}
+  .mat .tag{padding:0 8px; border-radius:6px; background:var(--asa); color:var(--ai); font-weight:700; font-size:1.125rem; white-space:nowrap}
+  .sr{position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap}
+
+  details{margin-top:4px}
+  summary{
+    display:flex; align-items:center; justify-content:space-between; min-height:52px; padding:0 4px;
+    border-top:1px solid var(--line); color:var(--ai); font-weight:700; cursor:pointer; list-style:none;
+  }
+  summary::-webkit-details-marker{display:none}
+  summary::after{content:"＋"; font-size:1.4rem}
+  details[open] summary::after{content:"－"}
+  .steps{margin:4px 0 6px; padding-left:1.6em}
+  .steps li{margin:8px 0; padding-left:.2em}
+  .steps li::marker{font-weight:700}
+
+  .memo{border-left:8px solid var(--asa)}
+  .memo ul{list-style:none; margin:8px 0 0; padding:0}
+  .chk{display:flex; align-items:center; gap:12px; min-height:52px; cursor:pointer}
+  .chk input{flex:none; width:28px; height:28px; margin:0; accent-color:var(--ai)}
+  .chk input:checked + .t{color:var(--mute); text-decoration:line-through}
+  .memo .note{margin-top:10px; color:var(--mute)}
+  .memo .btn{margin-top:12px}
+
+  .shopcard h2{font-size:1.125rem}
+  .shoplink{
+    display:flex; align-items:center; justify-content:center; min-height:56px; margin-top:10px; padding:10px 16px;
+    border:2px solid var(--ai); border-radius:14px; color:var(--ai); font-weight:700; text-decoration:none; text-align:center;
+  }
+  .shoplink.sub{border-color:var(--edge); color:var(--ai); font-weight:500}
+  .form{font-size:1rem; color:var(--mute); margin-left:.3em}
+  #shoplinks{display:grid; gap:10px}
+  .shopcard .note{margin-top:10px; color:var(--mute)}
+  .shoplink.off{border-style:dashed; border-color:var(--edge); color:var(--mute)}
+  .foot{max-width:960px; margin:8px auto 0; padding:0 16px; color:var(--mute)}
+
+  #toast{
+    position:fixed; z-index:30; left:50%; bottom:176px; transform:translateX(-50%); max-width:90vw;
+    padding:12px 20px; border-radius:12px; background:var(--ai); color:#fff; font-weight:700;
+    opacity:0; pointer-events:none; transition:opacity .2s;
+  }
+  #toast.show{opacity:1}
+
+  @keyframes rise{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
+  #result.reveal{animation:rise .28s ease-out}
+
+  @media (min-width:600px) and (max-width:899px){
+    .subs{grid-template-columns:repeat(2,minmax(0,1fr)); column-gap:16px}
+  }
+  @media (min-width:900px){
+    body{padding-bottom:0}
+    .foot{padding-bottom:24px}
+    .layout{grid-template-columns:minmax(0,1.05fr) minmax(0,1fr); column-gap:28px; align-items:start; padding-top:20px}
+    .col-out{position:sticky; top:16px; max-height:calc(100vh - 120px); overflow-y:auto; padding:4px 4px 0 0}
+    .dock{position:static; padding:0; border:0; background:none}
+    .dock-in{max-width:none}
+    .empty:not([hidden]){display:block}
+    .rhead{margin-top:0}
+    #toast{bottom:32px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{transition:none !important; animation:none !important}
+  }
+  @media print{
+    body{background:#fff; padding:0; font-size:16px}
+    .hero{background:none; color:#000; padding:0 0 8px}
+    .hero::after,.hero .sun,.hero .lede,.col-in,.empty,.rhead .btn,#copy,.shopcard,.foot,#toast{display:none !important}
+    .layout{display:block; padding:0}
+    .col-out{position:static; max-height:none; overflow:visible; padding:0}
+    .card{break-inside:avoid; border-color:#999}
+    .dish-sub{background:#fff; border:1px solid #999}
+  }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="hero-in">
+    <h1>魚の献立メーカー</h1>
+    <p class="lede"><span class="b ph">ざこばの朝市</span> <span class="ph">お魚を主役に、</span><span class="ph">今日の献立を</span><span class="ph">決めましょう。</span></p>
+  </div>
+  <div class="sun" aria-hidden="true"></div>
+</header>
+
+<main class="layout">
+  <div class="col-in">
+    <section class="card pick" aria-labelledby="s1">
+      <div class="shead">
+        <h2 id="s1"><span class="no">1</span>食材を選ぶ</h2>
+        <button type="button" class="link" id="clear" hidden>すべて解除</button>
+      </div>
+      <p class="help"><span class="ph">魚介は1つ以上。</span><span class="ph">ほかは、家にあるものや</span><span class="ph">買いたいものを</span><span class="ph">タップしてください。</span></p>
+      <div class="group-title">魚</div>
+      <div class="chips" id="chips-fish"></div>
+      <div class="group-title">貝・えび・いか・たこ</div>
+      <div class="chips" id="chips-shell"></div>
+      <div class="group-title">野菜・きのこ</div>
+      <div class="chips" id="chips-veg"></div>
+      <div class="group-title">そのほか</div>
+      <div class="chips" id="chips-other"></div>
+    </section>
+
+    <section class="card" aria-labelledby="s2">
+      <h2 id="s2"><span class="no">2</span>何人分つくりますか？</h2>
+      <div class="stepper">
+        <button type="button" id="minus" aria-label="人数を減らす">－</button>
+        <output id="people" aria-live="polite">2人分</output>
+        <button type="button" id="plus" aria-label="人数を増やす">＋</button>
+      </div>
+    </section>
+
+    <div class="dock">
+      <div class="dock-in">
+        <div id="count">食材を選んでください</div>
+        <div id="msg" role="alert"></div>
+        <button type="button" class="btn cta" id="make">献立をつくる</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-out">
+    <div id="empty" class="empty">
+      <p><span class="ph">魚介を選んで</span><span class="ph">「献立をつくる」を押すと、</span><span class="ph">ここに献立が出ます。</span></p>
+    </div>
+
+    <div id="result" hidden>
+      <div class="rhead">
+        <h2 id="rtitle" tabindex="-1">今日の献立</h2>
+        <span id="serv"></span>
+        <button type="button" class="btn" id="again">別の案にする</button>
+      </div>
+      <div id="dishes"></div>
+
+      <section class="card memo" aria-labelledby="s3">
+        <h2 id="s3">買い物メモ</h2>
+        <ul id="shoplist"></ul>
+        <p class="note">醤油・味噌・酒・みりん・砂糖・塩・油・酢・だし・小麦粉・片栗粉は、家にある前提です。</p>
+        <button type="button" class="btn" id="copy">買い物メモをコピー</button>
+      </section>
+
+      <section class="card shopcard" aria-labelledby="s4">
+        <h2 id="s4">お魚はこちらで</h2>
+        <div id="shoplinks"></div>
+        <p class="note">商品の在庫や内容は変わることがあります。冷凍品は、商品ページの表示どおりに解凍してください。</p>
+      </section>
+    </div>
+  </div>
+</main>
+
+<footer class="foot">
+  <p><span class="ph">分量は目安です。</span><span class="ph">アレルギーのある方は、</span><span class="ph">食材の表示をご確認ください。</span></p>
+</footer>
+<div id="toast" role="status"></div>
+
+<script>
+/* ===== 設定（ここだけ書き換えればOK） ===== */
+const SITE = "https://www.zakoba.jp";
+const SHOP_URL = SITE + "/"; // ショップのトップページ（空にするとリンクは「準備中」表示になります）
+
+/* ===== 食材データ =====
+   魚介は、ざこばの朝市オンラインショップに商品がある魚介だけ。
+   link：その魚介の商品が載っているページ（カテゴリ または サイト内検索） */
+const catUrl = p => SITE + '/c/sakana/' + p;
+const searchUrl = w => SITE + '/p/search?keyword=' + encodeURIComponent(w);
+const ING = [
+  {k:'sake', n:'鮭', c:'fish', link:catUrl('sk')},
+  {k:'saba', n:'鯖', c:'fish', link:catUrl('sb')},
+  {k:'sanma', n:'さんま', c:'fish', link:catUrl('sm')},
+  {k:'aji', n:'鯵', c:'fish', link:searchUrl('鯵')},
+  {k:'sawara', n:'鰆', c:'fish', link:searchUrl('鰆')},
+  {k:'katsuofish', n:'かつお', c:'fish', link:searchUrl('鰹')},
+  {k:'maguro', n:'まぐろ', c:'fish', link:catUrl('mg')},
+  {k:'karei', n:'かれい', c:'fish', link:searchUrl('カレイ')},
+  {k:'hokke', n:'ほっけ', c:'fish', link:searchUrl('ほっけ')},
+  {k:'shirasu', n:'しらす', c:'fish', link:catUrl('ss')},
+  {k:'shishamo', n:'ししゃも', c:'fish', link:searchUrl('ししゃも')},
+  {k:'unagi', n:'うなぎ', c:'fish', link:catUrl('ug')},
+  {k:'tai', n:'鯛', cl:'鯛（西京漬）', c:'fish', link:searchUrl('たい西京漬')},
+  {k:'buri', n:'ぶり', cl:'ぶり（西京漬）', c:'fish', link:searchUrl('ブリ西京漬')},
+  {k:'ika', n:'いか', c:'shell', link:catUrl('ika')},
+  {k:'ebi', n:'えび', c:'shell', link:catUrl('eb')},
+  {k:'tako', n:'たこ', c:'shell', link:catUrl('tk')},
+  {k:'kani', n:'かに', c:'shell', link:catUrl('kn')},
+  {k:'hotate', n:'ほたて', c:'shell', link:catUrl('ki')},
+  {k:'kaki', n:'牡蠣', c:'shell', link:searchUrl('牡蠣')},
+  {k:'asari', n:'あさり', c:'shell', link:searchUrl('あさり')},
+  {k:'daikon', n:'大根', c:'veg'}, {k:'hakusai', n:'白菜', c:'veg'}, {k:'negi', n:'ねぎ', c:'veg'},
+  {k:'jaga', n:'じゃがいも', c:'veg'}, {k:'tamanegi', n:'玉ねぎ', c:'veg'}, {k:'horenso', n:'ほうれん草', c:'veg'},
+  {k:'ninjin', n:'にんじん', c:'veg'}, {k:'kinoko', n:'きのこ', c:'veg'},
+  {k:'tofu', n:'豆腐', c:'other'}, {k:'tamago', n:'卵', c:'other'},
+  {k:'mozuku', n:'もずく', c:'other', link:catUrl('ks')}, {k:'mekabu', n:'めかぶ', c:'other', link:catUrl('ks')},
+  /* 選択肢には出ない、買い物メモ専用の材料 */
+  {k:'butter', n:'バター', c:'x'}, {k:'shoga', n:'しょうが', c:'x'}, {k:'katsuo', n:'かつお節', c:'x'}
+];
+const NAME = Object.fromEntries(ING.map(i => [i.k, i.n]));
+const BYK = Object.fromEntries(ING.map(i => [i.k, i]));
+const FISH = new Set(ING.filter(i => i.c === 'fish' || i.c === 'shell').map(i => i.k));
+
+/* N(材料, 1人分の量, 単位, 商品の形) ※形はサイトにある商品の形 */
+const N = (k, a, u, f) => ({k, a, u, f});
+
+/* ===== 献立データ（分量は1人分） ===== */
+const RECIPES = [
+  /* ---- 主菜 ---- */
+  {role:'main', name:'鮭の塩焼き', needs:[N('sake',1,'切れ')],
+   steps:['鮭に塩を振り、しばらく置いて水気を拭く。','グリルまたはフライパンで、皮目から焼く。','こんがり焼き色がついたら裏返し、中まで火を通す。']},
+  {role:'main', name:'鮭ときのこのホイル焼き', needs:[N('sake',1,'切れ'), N('kinoko',0.5,'パック'), N('butter',1,'かけ')],
+   steps:['ホイルに鮭とほぐしたきのこをのせ、塩とバターを添える。','ホイルを閉じ、フライパンにふたをして蒸し焼きにする。','中まで火が通ったら、醤油をたらして仕上げる。']},
+  {role:'main', name:'鮭とじゃがいものバター炒め', needs:[N('sake',1,'切れ'), N('jaga',1,'個'), N('butter',1,'かけ')],
+   steps:['じゃがいもを薄切りにし、やわらかくなるまで炒める。','一口大に切った鮭を加え、焼き色をつける。','バターと醤油で味をととのえる。']},
+
+  {role:'main', name:'鯖の味噌煮', needs:[N('saba',100,'g','無塩・骨取り'), N('negi',0.25,'本'), N('shoga',0.25,'かけ')],
+   steps:['鯖を食べやすい大きさに切る。','鍋に水・酒・みりん・砂糖・しょうがを入れて煮立て、鯖を皮目を上にして入れ、落としぶたをして煮る。','味噌を溶き入れ、ねぎを加えて煮汁を回しかける。']},
+  {role:'main', name:'鯖の竜田揚げ', needs:[N('saba',100,'g','無塩・骨取り'), N('shoga',0.25,'かけ')],
+   steps:['鯖を一口大に切り、醤油・酒・おろししょうがに漬けて味をなじませる。','汁気を軽く拭き、片栗粉をまぶす。','油で両面を揚げ焼きにし、中まで火を通す。']},
+
+  {role:'main', name:'塩さんまの塩焼き', needs:[N('sanma',1,'尾','塩さんま'), N('daikon',3,'cm')],
+   steps:['塩さんまは甘塩で下味がついているので、塩は振らず、水気を拭く。','グリルで皮目から焼き、焼き色がついたら裏返して中まで火を通す。','大根おろしを添え、醤油を少しかける。']},
+  {role:'main', name:'塩さんまのホイル焼き', needs:[N('sanma',1,'尾','塩さんま'), N('kinoko',0.5,'パック'), N('negi',0.25,'本')],
+   steps:['さんまを食べやすい長さに切り、水気を拭く。','ホイルにさんまとほぐしたきのこ、刻んだねぎをのせて包み、フライパンにふたをして蒸し焼きにする。','中まで火が通ったら、味を見て、足りなければ醤油を少したらす。']},
+
+  {role:'main', name:'アジフライの南蛮漬け', needs:[N('aji',3,'枚','アジフライ'), N('tamanegi',0.25,'個'), N('ninjin',0.25,'本')],
+   steps:['玉ねぎとにんじんを細切りにし、醤油・酢・砂糖・水を合わせてつけ汁を作る。','アジフライを、表示どおりに温めなおす。','熱いうちにつけ汁に漬け、味をなじませる。']},
+  {role:'main', name:'鯵の開きの塩焼き', needs:[N('aji',1,'枚','開き'), N('daikon',3,'cm')],
+   steps:['干物なので塩は振らず、表示どおりに解凍して水気を拭く。','グリルで、身の側から焼き、焼き色がついたら裏返して中まで火を通す。','大根おろしを添え、醤油をかける。']},
+
+  {role:'main', name:'寒さわらの炙り 薬味のせ', needs:[N('sawara',100,'g','生食用の炙り'), N('negi',0.25,'本'), N('shoga',0.25,'かけ')],
+   steps:['生食用の炙りを、表示どおりに解凍する。','食べやすい厚さに切って器に盛る。','刻んだねぎとおろししょうがをのせ、醤油をかける。']},
+  {role:'main', name:'寒さわらの炙りと大根おろし', needs:[N('sawara',100,'g','生食用の炙り'), N('daikon',3,'cm'), N('negi',0.25,'本')],
+   steps:['生食用の炙りを表示どおりに解凍し、食べやすい厚さに切る。','大根をおろし、軽く水気を切る。','さわらに大根おろしと刻んだねぎをのせ、醤油をかける。']},
+
+  {role:'main', name:'かつおのたたき 薬味のせ', needs:[N('katsuofish',80,'g','藁焼きのたたき'), N('tamanegi',0.25,'個'), N('negi',0.25,'本'), N('shoga',0.25,'かけ')],
+   steps:['藁焼きのたたきを、表示どおりに解凍する。','食べやすい厚さに切り、薄切りの玉ねぎにのせる。','刻んだねぎとおろししょうがを添え、醤油をかける。']},
+  {role:'main', name:'かつおのたたきの漬け', needs:[N('katsuofish',80,'g','藁焼きのたたき'), N('negi',0.25,'本'), N('shoga',0.25,'かけ')],
+   steps:['たたきを表示どおりに解凍し、食べやすい厚さに切る。','みりんと酒を一度煮立ててアルコールを飛ばし、醤油とおろししょうがを合わせて冷ます。','かつおを漬けてなじませ、刻んだねぎをのせる。']},
+
+  {role:'main', name:'まぐろの漬け', needs:[N('maguro',80,'g','赤身'), N('negi',0.25,'本'), N('shoga',0.25,'かけ')],
+   steps:['生で食べられる表示を確認し、表示どおりに解凍して、食べやすく切る。','みりんと酒を一度煮立ててアルコールを飛ばし、醤油とおろししょうがを合わせる。','たれにまぐろを漬けてなじませ、刻んだねぎをのせる。']},
+  {role:'main', name:'ネギトロのユッケ風', needs:[N('maguro',80,'g','ネギトロ'), N('tamago',1,'個'), N('negi',0.25,'本')],
+   steps:['生で食べられる表示を確認し、表示どおりに解凍して、器に盛る。','刻んだねぎをのせ、卵黄を落とす。','醤油をかけ、混ぜて食べる。']},
+
+  {role:'main', name:'笹カレイの一夜干しの塩焼き', needs:[N('karei',3,'枚','笹カレイ一夜干し'), N('daikon',3,'cm')],
+   steps:['干物なので塩は振らず、表示どおりに解凍して水気を拭く。','グリルで、身の側から焼き、裏返して中まで火を通す。','大根おろしを添え、醤油をかける。']},
+  {role:'main', name:'笹カレイの唐揚げ', needs:[N('karei',3,'枚','笹カレイ一夜干し')],
+   steps:['表示どおりに解凍し、水気を拭く。','片栗粉を薄くまぶす。','油で両面をこんがり揚げ焼きにし、中まで火を通す。']},
+
+  {role:'main', name:'ほっけの開きの塩焼き', needs:[N('hokke',0.5,'枚','開き'), N('daikon',3,'cm')],
+   steps:['干物なので塩は振らず、表示どおりに解凍して水気を拭く。','グリルで、身の側から焼き、裏返して中まで火を通す。','大根おろしを添え、醤油をかける。']},
+  {role:'main', name:'ほっけの開きのバター醤油', needs:[N('hokke',0.5,'枚','開き'), N('butter',1,'かけ'), N('negi',0.25,'本')],
+   steps:['表示どおりに解凍し、水気を拭いて、グリルで中まで焼く。','焼き上がりにバターをのせて溶かし、醤油をたらす。','刻んだねぎをのせる。']},
+
+  {role:'main', name:'しらすと卵のふわふわ焼き', needs:[N('shirasu',20,'g','釜揚げ'), N('tamago',1,'個'), N('negi',0.25,'本')],
+   steps:['卵を溶き、しらすと刻んだねぎを混ぜる。','油をひいたフライパンに流し、ふんわり焼いて半分に折る。','お好みで醤油をたらす。']},
+  {role:'main', name:'しらすと豆腐の卵とじ', needs:[N('shirasu',20,'g','釜揚げ'), N('tofu',0.5,'丁'), N('tamago',1,'個'), N('negi',0.25,'本')],
+   steps:['鍋に水・醤油・みりん・酒を入れて煮立て、さいの目に切った豆腐としらすを加える。','ひと煮立ちしたら、溶き卵を回し入れる。','卵が好みのかたさになったら火を止め、刻んだねぎをのせる。']},
+
+  {role:'main', name:'子持ちししゃもの焼き', needs:[N('shishamo',4,'尾','子持ち'), N('daikon',3,'cm')],
+   steps:['表示どおりに解凍し、水気を拭く。','グリルで、こんがり焼き色がつくまで、中まで火を通して焼く。','大根おろしを添え、醤油をかける。']},
+  {role:'main', name:'子持ちししゃもの南蛮漬け', needs:[N('shishamo',4,'尾','子持ち'), N('tamanegi',0.25,'個'), N('ninjin',0.25,'本')],
+   steps:['玉ねぎとにんじんを細切りにし、醤油・酢・砂糖・水を合わせてつけ汁を作る。','解凍したししゃもに片栗粉を薄くまぶし、油で揚げ焼きにして中まで火を通す。','熱いうちにつけ汁に漬け、味をなじませる。']},
+
+  {role:'main', name:'うなぎの蒲焼き', needs:[N('unagi',0.5,'本','蒲焼き'), N('negi',0.25,'本')],
+   steps:['蒲焼きを、パッケージの表示どおりに温める。','食べやすい長さに切って盛り、刻んだねぎをのせる。','付属のたれがあれば、かける。']},
+  {role:'main', name:'うな玉', needs:[N('unagi',0.5,'本','蒲焼き'), N('tamago',1,'個'), N('negi',0.25,'本')],
+   steps:['蒲焼きを表示どおりに温め、食べやすく切る。','溶き卵に、うなぎと刻んだねぎを混ぜる。','油をひいたフライパンで、卵が半熟になるまで焼く。']},
+
+  {role:'main', name:'鯛の西京焼き', needs:[N('tai',1,'切れ','西京漬')],
+   steps:['鯛の西京漬を、表示どおりに解凍する。','表面の味噌を軽く拭き取る。','焦げやすいので、弱めの火で様子を見ながら、中まで火を通す。']},
+  {role:'main', name:'鯛の西京漬ときのこのホイル焼き', needs:[N('tai',1,'切れ','西京漬'), N('kinoko',0.5,'パック'), N('negi',0.25,'本')],
+   steps:['鯛の西京漬を表示どおりに解凍し、表面の味噌を軽く拭き取る。','ホイルに鯛とほぐしたきのこをのせて包み、フライパンにふたをして蒸し焼きにする。','中まで火が通ったら、刻んだねぎをのせる。']},
+  {role:'main', name:'ぶりの西京焼き', needs:[N('buri',1,'切れ','西京漬')],
+   steps:['ぶりの西京漬を、表示どおりに解凍する。','表面の味噌を軽く拭き取る。','焦げやすいので、弱めの火で様子を見ながら、中まで火を通す。']},
+  {role:'main', name:'ぶりの西京漬ときのこのホイル焼き', needs:[N('buri',1,'切れ','西京漬'), N('kinoko',0.5,'パック'), N('negi',0.25,'本')],
+   steps:['ぶりの西京漬を表示どおりに解凍し、表面の味噌を軽く拭き取る。','ホイルにぶりとほぐしたきのこをのせて包み、フライパンにふたをして蒸し焼きにする。','中まで火が通ったら、刻んだねぎをのせる。']},
+
+  {role:'main', name:'いか一夜干しの炙り焼き', needs:[N('ika',100,'g','一夜干し'), N('daikon',3,'cm')],
+   steps:['表示どおりに解凍し、水気を拭く。','グリルで、焼き色がつくまで焼き、食べやすく切る。','大根おろしを添え、醤油をかける。']},
+  {role:'main', name:'いか一夜干しとねぎのバター醤油炒め', needs:[N('ika',100,'g','一夜干し'), N('butter',1,'かけ'), N('negi',0.25,'本')],
+   steps:['表示どおりに解凍し、食べやすい大きさに切る。','バターで、ねぎと一緒にさっと炒める。','醤油をたらして仕上げる。']},
+
+  {role:'main', name:'えびと卵の炒め', needs:[N('ebi',4,'尾'), N('tamago',1,'個'), N('negi',0.25,'本')],
+   steps:['えびを表示どおりに解凍し、殻があればむいて、酒を振っておく。卵は溶きほぐす。','油でえびとねぎを炒め、色が変わったら取り出す。','卵を半熟に炒め、えびを戻して塩と醤油で味をととのえる。']},
+  {role:'main', name:'えびと白菜の炒め煮', needs:[N('ebi',4,'尾'), N('hakusai',1,'枚'), N('ninjin',0.25,'本')],
+   steps:['えびを表示どおりに解凍し、殻があればむいて、酒を振っておく。白菜はざく切り、にんじんは細切りにする。','油でにんじんと白菜を炒め、水・酒・醤油・みりんを加えて煮る。','白菜がしんなりしたらえびを加え、色が変わるまで煮る。']},
+
+  {role:'main', name:'たこと大根の煮物', needs:[N('tako',60,'g','カット済み・加熱用'), N('daikon',3,'cm')],
+   steps:['大根を厚めのいちょう切りにし、先に下ゆでする。','鍋に水・酒・醤油・みりん・砂糖と大根を入れて煮る。','大根に味がしみたら、表示どおりに解凍したたこを加えてさっと煮る。']},
+  {role:'main', name:'たこのバター醤油炒め', needs:[N('tako',60,'g','カット済み・加熱用'), N('butter',1,'かけ'), N('negi',0.25,'本')],
+   steps:['たこを表示どおりに解凍し、水気を拭く。','バターで、ねぎと一緒にさっと炒める。','醤油をたらして仕上げる。']},
+
+  {role:'main', name:'かにの鍋', needs:[N('kani',200,'g','生ズワイガニ・カット済み'), N('hakusai',1,'枚'), N('negi',0.25,'本'), N('tofu',0.25,'丁'), N('kinoko',0.25,'パック')],
+   steps:['白菜・ねぎ・きのこ・豆腐を食べやすく切る。','鍋にだし・酒・醤油・みりん・塩を少し入れて煮立て、白菜ときのこ、豆腐を煮る。','野菜に火が通ったら、表示どおりに解凍したかにを加え、軽く温める。火を通しすぎない。']},
+  {role:'main', name:'かに玉', needs:[N('kani',50,'g','むき身（ポーション）'), N('tamago',1,'個'), N('negi',0.25,'本')],
+   steps:['かにを表示どおりに解凍し、ほぐす。','溶き卵に、かにと刻んだねぎを混ぜる。','油をひいたフライパンで卵が半熟になるまで焼き、醤油とみりんを少したらして仕上げる。']},
+
+  {role:'main', name:'ほたてのバター醤油焼き', needs:[N('hotate',80,'g','貝柱'), N('butter',1,'かけ'), N('negi',0.25,'本')],
+   steps:['ほたての貝柱を表示どおりに解凍し、水気を拭いて塩を振る。','バターを溶かしたフライパンで、両面に焼き色をつける。','醤油をたらし、刻んだねぎをのせる。']},
+  {role:'main', name:'ほたてとほうれん草のバター炒め', needs:[N('hotate',80,'g','貝柱'), N('horenso',0.25,'束'), N('butter',1,'かけ')],
+   steps:['ほうれん草をざく切りにし、ほたての貝柱は表示どおりに解凍して水気を拭く。','バターでほたてを焼き、ほうれん草を加えて炒める。','塩と醤油で味をととのえる。']},
+
+  {role:'main', name:'牡蠣のバター醤油ソテー', needs:[N('kaki',4,'粒','むき身・加熱用'), N('butter',1,'かけ'), N('negi',0.25,'本')],
+   steps:['加熱用のむき牡蠣を表示どおりに解凍し、塩水で洗い、水気を拭いて小麦粉を薄くまぶす。','バターで両面に焼き色がつくまで、中まで火を通して焼く。','醤油をたらし、刻んだねぎをのせる。']},
+  {role:'main', name:'牡蠣と豆腐の煮物', needs:[N('kaki',4,'粒','むき身・加熱用'), N('tofu',0.5,'丁'), N('negi',0.25,'本')],
+   steps:['鍋に水・酒・醤油・みりんを入れて煮立てる。','豆腐を入れ、表示どおりに解凍した加熱用のむき牡蠣を加える。','牡蠣がふっくらして中まで火が通ったら、ねぎを加えてひと煮立ちさせる。']},
+
+  {role:'main', name:'あさりと白菜の蒸し煮', needs:[N('asari',50,'g','むき身（ボイル済み）'), N('hakusai',1,'枚')],
+   steps:['白菜をざく切りにする。','鍋に白菜と酒を入れ、ふたをして蒸し煮にする。','白菜がしんなりしたら、表示どおりに解凍したむきあさりを加え、温まったら醤油を少したらして仕上げる。ボイル済みなので煮すぎない。']},
+  {role:'main', name:'あさりのバター醤油炒め', needs:[N('asari',50,'g','むき身（ボイル済み）'), N('butter',1,'かけ'), N('negi',0.25,'本')],
+   steps:['むきあさりを表示どおりに解凍し、水気を切る。','バターで、ねぎと一緒にさっと炒める。','醤油をたらして仕上げる。']},
+
+  /* ---- 副菜 ---- */
+  {role:'side', name:'ほうれん草のおひたし', needs:[N('horenso',0.5,'束'), N('katsuo',0.5,'袋')],
+   steps:['ほうれん草をさっとゆで、冷水にとって水気を絞る。','食べやすく切り、醤油をかけてかつお節をのせる。']},
+  {role:'side', name:'大根とにんじんのなます', needs:[N('daikon',3,'cm'), N('ninjin',0.25,'本')],
+   steps:['大根とにんじんを細切りにして塩をもみ込み、水気を絞る。','酢と砂糖を混ぜた液で和える。']},
+  {role:'side', name:'卵焼き', needs:[N('tamago',1,'個')],
+   steps:['卵を溶き、砂糖と塩、醤油を少し加えて混ぜる。','油をひいたフライパンで、数回に分けて巻きながら焼く。']},
+  {role:'side', name:'きのこのバターソテー', needs:[N('kinoko',0.5,'パック'), N('butter',1,'かけ')],
+   steps:['きのこをほぐし、バターで炒める。','しんなりしたら醤油を少したらして仕上げる。']},
+  {role:'side', name:'じゃがいもの甘辛炒め', needs:[N('jaga',1,'個'), N('ninjin',0.25,'本')],
+   steps:['じゃがいもとにんじんを細切りにし、油で炒める。','しんなりしたら醤油・みりん・砂糖で味をつける。']},
+  {role:'side', name:'白菜のおかか和え', needs:[N('hakusai',1,'枚'), N('katsuo',0.5,'袋')],
+   steps:['白菜を細切りにして塩をもみ、水気を絞る。','かつお節と醤油で和える。']},
+  {role:'side', name:'冷奴', needs:[N('tofu',0.5,'丁'), N('negi',0.25,'本')],
+   steps:['豆腐を水切りして器に盛る。','刻んだねぎをのせ、醤油をかける。']},
+  {role:'side', name:'玉ねぎのおかか和え', needs:[N('tamanegi',0.5,'個'), N('katsuo',0.5,'袋')],
+   steps:['玉ねぎを薄切りにして水にさらし、水気をしっかり切る。','かつお節と醤油で和える。']},
+  {role:'side', name:'しらすおろし', needs:[N('shirasu',15,'g','釜揚げ'), N('daikon',3,'cm')],
+   steps:['大根をおろし、水気を軽く切る。','しらすをのせ、醤油をかける。']},
+  {role:'side', name:'もずくの酢の物', needs:[N('mozuku',40,'g','生もずく')],
+   steps:['生もずくをさっと洗い、水気を切る。','酢・砂糖・醤油を少し混ぜ、もずくを和える。']},
+  {role:'side', name:'めかぶ豆腐', needs:[N('mekabu',40,'g','刻みめかぶ'), N('tofu',0.5,'丁')],
+   steps:['豆腐を水切りして器に盛る。','めかぶをのせ、醤油をかける。']},
+
+  /* ---- 汁物 ---- */
+  {role:'soup', name:'豆腐とねぎの味噌汁', needs:[N('tofu',0.25,'丁'), N('negi',0.25,'本')],
+   steps:['だしを温め、さいの目に切った豆腐を入れる。','味噌を溶き、ねぎを加えてひと煮立ちさせる。']},
+  {role:'soup', name:'大根の味噌汁', needs:[N('daikon',3,'cm')],
+   steps:['大根を短冊切りにし、だしでやわらかくなるまで煮る。','火を弱めて味噌を溶く。']},
+  {role:'soup', name:'じゃがいもと玉ねぎの味噌汁', needs:[N('jaga',0.5,'個'), N('tamanegi',0.25,'個')],
+   steps:['じゃがいもと玉ねぎを切り、だしでやわらかくなるまで煮る。','火を弱めて味噌を溶く。']},
+  {role:'soup', name:'きのこの味噌汁', needs:[N('kinoko',0.25,'パック'), N('negi',0.25,'本')],
+   steps:['きのこをほぐし、だしで煮る。','味噌を溶き、ねぎを加える。']},
+  {role:'soup', name:'白菜と卵のすまし汁', needs:[N('hakusai',0.5,'枚'), N('tamago',0.5,'個')],
+   steps:['白菜を細切りにし、だしで煮る。','醤油と塩で味をととのえ、溶き卵を回し入れる。']},
+  {role:'soup', name:'ほうれん草の味噌汁', needs:[N('horenso',0.25,'束')],
+   steps:['ほうれん草をゆでて水にとり、食べやすく切る。','だしを温めて味噌を溶き、ほうれん草を加える。']},
+  {role:'soup', name:'あさりの味噌汁', needs:[N('asari',30,'g','むき身（ボイル済み）'), N('negi',0.25,'本')],
+   steps:['だしを温め、表示どおりに解凍したむきあさりを入れる。','ひと煮立ちしたら火を弱めて味噌を溶く。ボイル済みなので煮すぎない。','刻んだねぎを加える。']},
+  {role:'soup', name:'鮭汁', needs:[N('sake',0.5,'切れ'), N('daikon',3,'cm'), N('negi',0.25,'本')],
+   steps:['鮭を一口大に切り、大根を短冊切りにする。','だしで大根を煮て、鮭を加える。','火が通ったら味噌を溶き、ねぎを加える。']},
+  {role:'soup', name:'もずくと豆腐のすまし汁', needs:[N('mozuku',30,'g','生もずく'), N('tofu',0.25,'丁')],
+   steps:['だしを温め、醤油と塩で味をととのえる。','さいの目に切った豆腐を入れ、温まったら、洗って水気を切った生もずくを加える。','ひと煮立ちさせて火を止める。']}
+];
+const ROLE_LABEL = {main:'主菜', side:'副菜', soup:'汁物'};
+
+/* ===== 状態 ===== */
+const sel = new Set();
+let people = 2;
+let seed = 0;
+let shown = false;
+
+/* ===== 表示用ヘルパー ===== */
+function fmt(x){
+  const q = Math.round(x * 4) / 4;
+  if (q <= 0) return '少々';
+  const w = Math.floor(q), f = q - w;
+  const fr = f === 0.25 ? '¼' : f === 0.5 ? '½' : f === 0.75 ? '¾' : '';
+  return (w > 0 ? String(w) : '') + fr;
+}
+function amountText(a, u){ const t = fmt(a); return t === '少々' ? t : t + u; }
+const $ = id => document.getElementById(id);
+function el(tag, cls, text){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function hasFish(){ return Array.from(sel).some(k => FISH.has(k)); }
+const reduceMotion = () => !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+/* ===== 操作バーの表示 ===== */
+function updateDock(){
+  const n = sel.size;
+  $('count').textContent = n === 0 ? '食材を選んでください'
+    : hasFish() ? '選んだ食材 ' + n + 'つ'
+    : '選んだ食材 ' + n + 'つ（魚介を1つ選んでください）';
+  $('clear').hidden = n === 0;
+}
+function showResult(on){
+  $('result').hidden = !on;
+  $('empty').hidden = on;
+  shown = on;
+}
+
+/* ===== チップ描画 ===== */
+function renderChips(){
+  [['fish','chips-fish'], ['shell','chips-shell'], ['veg','chips-veg'], ['other','chips-other']].forEach(([cat, id]) => {
+    const box = $(id);
+    ING.filter(i => i.c === cat).forEach(i => {
+      const lab = document.createElement('label');
+      lab.className = 'chip';
+      const inp = document.createElement('input');
+      inp.type = 'checkbox'; inp.value = i.k;
+      inp.addEventListener('change', () => {
+        if (inp.checked) sel.add(i.k); else sel.delete(i.k);
+        $('msg').textContent = '';
+        updateDock();
+        if (shown){
+          if (!hasFish()){
+            showResult(false);
+            $('msg').textContent = '魚介を1つ以上選んでください。';
+          } else {
+            render();
+          }
+        }
+      });
+      const sp = document.createElement('span');
+      sp.textContent = i.cl || i.n;
+      lab.append(inp, sp);
+      box.append(lab);
+    });
+  });
+}
+
+/* ===== 献立の選び方（ルールベース） ===== */
+function pick(role, main){
+  let cands = RECIPES.filter(r => r.role === role);
+  if (role === 'main'){
+    cands = cands.filter(r => r.needs.some(n => FISH.has(n.k) && sel.has(n.k)));
+  } else {
+    /* 副菜・汁物：選んでいない魚介は使わない／主菜と同じ魚介は使わない */
+    const used = new Set(main.needs.filter(n => FISH.has(n.k)).map(n => n.k));
+    cands = cands.filter(r => r.needs.every(n => !FISH.has(n.k) || (sel.has(n.k) && !used.has(n.k))));
+  }
+  const scored = cands.map(r => {
+    const matched = r.needs.filter(n => sel.has(n.k)).length;
+    const missing = r.needs.length - matched;
+    return {r, score: matched * 10 - missing};
+  }).sort((a, b) => b.score - a.score);
+  const best = scored[0].score;
+  const pool = scored.filter(s => s.score >= best - 10).length;
+  const size = Math.max(pool, Math.min(3, scored.length));
+  return scored[seed % size].r;
+}
+
+/* ===== 料理カード ===== */
+function dishCard(d, isMain, shop){
+  const card = el('section', 'card dish ' + (isMain ? 'dish-main' : 'dish-sub'));
+  card.append(el('div', 'role', ROLE_LABEL[d.role]), el('h3', '', d.name));
+  const ul = el('ul', 'mat');
+  d.needs.forEach(n => {
+    const have = sel.has(n.k);
+    const li = el('li', have ? 'have' : 'buy');
+    const nm = el('span', 'n', NAME[n.k]);
+    if (n.f) nm.append(el('small', 'form', '（' + n.f + '）'));
+    li.append(nm, el('span', 'a', amountText(n.a * people, n.u)));
+    if (have){
+      li.append(el('span', 'sr', '（選んだ食材）'));
+    } else {
+      li.append(el('span', 'tag', '買い足し'));
+      const cur = shop.get(n.k) || {a:0, u:n.u, f:n.f};
+      cur.a += n.a * people;
+      shop.set(n.k, cur);
+    }
+    ul.append(li);
+  });
+  const det = el('details');
+  if (isMain) det.open = true;
+  const ol = el('ol', 'steps');
+  d.steps.forEach(s => ol.append(el('li', '', s)));
+  det.append(el('summary', '', '作り方'), ol);
+  card.append(ul, det);
+  return card;
+}
+
+/* ===== 結果表示 ===== */
+function render(){
+  const mainDish = pick('main');
+  const dishes = [mainDish, pick('side', mainDish), pick('soup', mainDish)];
+  const first = !shown;
+  const box = $('dishes');
+  box.innerHTML = '';
+  const shop = new Map();
+
+  box.append(dishCard(dishes[0], true, shop));
+  const subs = el('div', 'subs');
+  subs.append(dishCard(dishes[1], false, shop), dishCard(dishes[2], false, shop));
+  box.append(subs);
+
+  const list = $('shoplist');
+  list.innerHTML = '';
+  if (shop.size === 0){
+    list.append(el('li', '', '買い足しは必要ありません。'));
+  } else {
+    shop.forEach((v, k) => {
+      const li = el('li');
+      const lab = el('label', 'chk');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      lab.append(cb, el('span', 't', NAME[k] + (v.f ? '（' + v.f + '）' : '') + ' ' + amountText(v.a, v.u)));
+      li.append(lab);
+      list.append(li);
+    });
+  }
+  renderLinks(dishes);
+  $('serv').textContent = people + '人分';
+  showResult(true);
+  if (first && !reduceMotion()){
+    const r = $('result');
+    r.classList.remove('reveal'); void r.offsetWidth; r.classList.add('reveal');
+  }
+}
+
+/* 使った魚介の商品ページへのリンク */
+function renderLinks(dishes){
+  const box = $('shoplinks');
+  box.innerHTML = '';
+  const seen = new Set();
+  dishes.forEach(d => d.needs.forEach(n => {
+    const it = BYK[n.k];
+    if (!it || !it.link || !FISH.has(n.k) && it.c !== 'other' || seen.has(n.k)) return;
+    seen.add(n.k);
+    const a = el('a', 'shoplink', (it.cl || it.n) + 'の商品を見る');
+    a.href = it.link; a.target = '_blank'; a.rel = 'noopener';
+    box.append(a);
+  }));
+  if (SHOP_URL){
+    const a = el('a', 'shoplink sub', 'ざこばの朝市トップページ');
+    a.href = SHOP_URL; a.target = '_blank'; a.rel = 'noopener';
+    box.append(a);
+  }
+}
+
+function shopText(){
+  const items = Array.from($('shoplist').children).map(li => '・' + li.textContent);
+  return '【買い物メモ】' + people + '人分\n' + items.join('\n');
+}
+
+function toast(t){
+  const el_ = $('toast'); el_.textContent = t; el_.classList.add('show');
+  setTimeout(() => el_.classList.remove('show'), 1800);
+}
+
+/* ===== イベント ===== */
+function make(){
+  if (!hasFish()){ $('msg').textContent = '魚介を1つ以上選んでください。'; return; }
+  $('msg').textContent = '';
+  seed = 0;
+  render();
+  const wide = window.matchMedia && window.matchMedia('(min-width:900px)').matches;
+  if (!wide) $('result').scrollIntoView({behavior: reduceMotion() ? 'auto' : 'smooth', block:'start'});
+  $('rtitle').focus({preventScroll:true});
+}
+function setPeople(n){
+  people = Math.min(6, Math.max(1, n));
+  $('people').textContent = people + '人分';
+  $('minus').disabled = people <= 1;
+  $('plus').disabled = people >= 6;
+  if (shown) render();
+}
+
+renderChips();
+updateDock();
+setPeople(people);
+$('make').addEventListener('click', make);
+$('again').addEventListener('click', () => { seed++; render(); });
+$('minus').addEventListener('click', () => setPeople(people - 1));
+$('plus').addEventListener('click', () => setPeople(people + 1));
+$('clear').addEventListener('click', () => {
+  sel.clear();
+  document.querySelectorAll('.chip input').forEach(i => { i.checked = false; });
+  $('msg').textContent = '';
+  updateDock();
+  if (shown) showResult(false);
+});
+$('copy').addEventListener('click', () => {
+  const t = shopText();
+  const done = () => toast('コピーしました');
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(t).then(done, () => toast('コピーできませんでした'));
+  } else {
+    const ta = document.createElement('textarea'); ta.value = t; document.body.append(ta); ta.select();
+    try { document.execCommand('copy'); done(); } catch(e){ toast('コピーできませんでした'); }
+    ta.remove();
+  }
+});
+window.addEventListener('beforeprint', () => document.querySelectorAll('#dishes details').forEach(d => { d.open = true; }));
+
+</script>
+</body>
+</html>
